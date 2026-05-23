@@ -1,0 +1,38 @@
+{
+  "enabled_group_ids": {
+    "type": "list",
+    "description": "启用崩溃报告分析的群聊 ID 列表。",
+    "hint": "请填写群号字符串列表，例如 [\"123456789\"]；留空表示不处理任何群聊。",
+    "default": []
+  },
+  "max_full_crash_chars": {
+    "type": "int",
+    "description": "完整崩溃报告允许分析的最大字符数。",
+    "hint": "超过该长度的完整崩溃报告会按插件逻辑截断或改用摘要，建议保持默认值 60000。",
+    "default": 60000
+  },
+  "latest_log_tail_lines": {
+    "type": "int",
+    "description": "latest.log 参与分析时读取末尾的行数。",
+    "hint": "用于限制 latest.log 的分析范围，数值越大包含的上下文越多，建议保持默认值 800。",
+    "default": 800
+  },
+  "max_input_file_bytes": {
+    "type": "int",
+    "description": "允许读取的单个上传文件最大字节数。",
+    "hint": "用于防止超大文件占用过多内存，默认 20971520，即 20 MiB；插件内部最高限制为 50 MiB。",
+    "default": 20971520
+  },
+  "max_zip_member_bytes": {
+    "type": "int",
+    "description": "允许读取的 zip 内单个日志条目最大解压字节数。",
+    "hint": "用于防止 zip bomb 或超大日志条目，默认 5242880，即 5 MiB；插件内部最高限制为 10 MiB。",
+    "default": 5242880
+  },
+  "max_zip_entries": {
+    "type": "int",
+    "description": "允许扫描的 zip 条目数量上限。",
+    "hint": "用于防止异常压缩包包含过多文件，默认 200；插件内部最高限制为 1000。",
+    "default": 200
+  }
+}
