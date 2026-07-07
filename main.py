@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import socket
 import zipfile
 
 from astrbot.api import logger
@@ -11,6 +12,7 @@ from astrbot.api.star import Context, Star, register
 
 PCL_ERROR_REPORT_ZIP_PATTERN = re.compile(r"^错误报告-\d{4}-\d{1,2}-\d{1,2}_\d{1,2}\.\d{1,2}\.\d{1,2}\.zip$")
 CRASH_REPORT_FILE_PATTERN = re.compile(r"(^|/)crash-\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}-(client|server|fml)\.txt$")
+MCLOGS_LINK_PATTERN = re.compile(r"https://mclo\.gs/([A-Za-z0-9]{7})(?![A-Za-z0-9])")
 CRASH_KEYWORDS = (
     "Caused by",
     "-- System Details --",
@@ -33,6 +35,10 @@ MAX_ZIP_ENTRIES_LIMIT = 1000
 
 
 class CrashReportTooLarge(ValueError):
+    pass
+
+
+class MclogsFetchError(RuntimeError):
     pass
 
 
@@ -65,6 +71,13 @@ def is_crash_report_file(filename):
     return bool(CRASH_REPORT_FILE_PATTERN.search(normalized))
 
 
+def extract_mclogs_id_from_text(text):
+    match = MCLOGS_LINK_PATTERN.search(str(text))
+    if not match:
+        return None
+    return match.group(1)
+
+
 def is_group_allowed(group_id, whitelist):
     if not whitelist:
         return False
@@ -95,6 +108,46 @@ def read_limited_file(path, max_bytes):
 
 def read_text_file_robust(path, max_bytes=DEFAULT_MAX_INPUT_FILE_BYTES):
     return _decode_zip_text(read_limited_file(path, max_bytes))
+
+
+async def fetch_mclogs_raw_text(log_id, max_bytes=DEFAULT_MAX_INPUT_FILE_BYTES):
+    import httpx
+
+    limits = httpx.Limits(
+        max_connections=200,
+        max_keepalive_connections=40,
+        keepalive_expiry=30.0,
+    )
+    timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=10.0)
+    transport = httpx.AsyncHTTPTransport(
+        http2=True,
+        retries=3,
+        limits=limits,
+        socket_options=[(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)],
+        trust_env=False,
+    )
+    url = f"https://api.mclo.gs/1/raw/{log_id}"
+
+    try:
+        async with httpx.AsyncClient(
+            transport=transport,
+            timeout=timeout,
+            follow_redirects=True,
+            trust_env=False,
+        ) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
+                chunks = []
+                total_size = 0
+                async for chunk in response.aiter_bytes():
+                    total_size += len(chunk)
+                    if total_size > max_bytes:
+                        raise CrashReportTooLarge(f"mclo.gs 日志大小超过限制：{total_size} > {max_bytes}")
+                    chunks.append(chunk)
+    except httpx.HTTPError as error:
+        raise MclogsFetchError(f"获取 mclo.gs 日志失败：{url}") from error
+
+    return _decode_zip_text(b"".join(chunks))
 
 
 def _read_zip_member_text(archive, info, max_member_bytes):
@@ -220,6 +273,10 @@ def _get_file_name(file_segment):
     return ""
 
 
+def _get_plain_text(text_segment):
+    return str(getattr(text_segment, "text", ""))
+
+
 def _is_accepted_file_name(filename):
     return is_pcl_error_report_zip(filename) or is_crash_report_file(filename)
 
@@ -246,7 +303,7 @@ def _build_forward_nodes(filename, source, sender, analysis):
     )
 
 
-@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.0")
+@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.1")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -264,16 +321,9 @@ class MyPlugin(Star):
                 return
 
             messages = _get_message_segments(event)
-            if len(messages) != 1 or not isinstance(messages[0], Comp.File):
+            if len(messages) != 1:
                 return
 
-            file_segment = messages[0]
-            filename = _get_file_name(file_segment)
-            if not _is_accepted_file_name(filename):
-                return
-
-            event.stop_event()
-            downloaded_path = await file_segment.get_file()
             max_chars = _bounded_config_int(
                 self.config,
                 "max_full_crash_chars",
@@ -310,26 +360,47 @@ class MyPlugin(Star):
                 MAX_ZIP_ENTRIES_LIMIT,
             )
 
-            if is_pcl_error_report_zip(filename):
-                report = extract_report_from_zip_bytes(
-                    read_limited_file(downloaded_path, max_input_bytes),
-                    tail_lines=tail_lines,
-                    max_member_bytes=max_zip_member_bytes,
-                    max_entries=max_zip_entries,
-                )
-                if not report:
-                    logger.warning("压缩包中未找到可分析的崩溃报告：%s", filename)
+            segment = messages[0]
+            if isinstance(segment, Comp.File):
+                filename = _get_file_name(segment)
+                if not _is_accepted_file_name(filename):
                     return
-                report_filename = report["filename"]
-                source = report["source"]
-                prepared_content = prepare_crash_text(report["content"], max_chars=max_chars)
-            else:
-                report_filename = filename
-                source = "crash-report"
+                event.stop_event()
+                downloaded_path = await segment.get_file()
+
+                if is_pcl_error_report_zip(filename):
+                    report = extract_report_from_zip_bytes(
+                        read_limited_file(downloaded_path, max_input_bytes),
+                        tail_lines=tail_lines,
+                        max_member_bytes=max_zip_member_bytes,
+                        max_entries=max_zip_entries,
+                    )
+                    if not report:
+                        logger.warning("压缩包中未找到可分析的崩溃报告：%s", filename)
+                        return
+                    report_filename = report["filename"]
+                    source = report["source"]
+                    prepared_content = prepare_crash_text(report["content"], max_chars=max_chars)
+                else:
+                    report_filename = filename
+                    source = "crash-report"
+                    prepared_content = prepare_crash_text(
+                        read_text_file_robust(downloaded_path, max_bytes=max_input_bytes),
+                        max_chars=max_chars,
+                    )
+            elif isinstance(segment, Comp.Plain):
+                log_id = extract_mclogs_id_from_text(_get_plain_text(segment))
+                if not log_id:
+                    return
+                event.stop_event()
+                report_filename = f"mclo.gs/{log_id}"
+                source = "mclo.gs raw"
                 prepared_content = prepare_crash_text(
-                    read_text_file_robust(downloaded_path, max_bytes=max_input_bytes),
+                    await fetch_mclogs_raw_text(log_id, max_bytes=max_input_bytes),
                     max_chars=max_chars,
                 )
+            else:
+                return
 
             sender = _sender_text(event)
             prompt = build_analysis_prompt(report_filename, source, sender, prepared_content)
