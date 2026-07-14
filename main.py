@@ -32,6 +32,8 @@ LATEST_LOG_TAIL_LINES_LIMIT = 5000
 MAX_INPUT_FILE_BYTES_LIMIT = 50 * 1024 * 1024
 MAX_ZIP_MEMBER_BYTES_LIMIT = 10 * 1024 * 1024
 MAX_ZIP_ENTRIES_LIMIT = 1000
+PARSED_MESSAGE_EMOJI_ID = 289
+PARSED_MESSAGE_EMOJI_TYPE = "1"
 
 
 class CrashReportTooLarge(ValueError):
@@ -265,6 +267,41 @@ def _get_message_segments(event):
     return getattr(message_obj, "message", []) or []
 
 
+def _get_message_id(event):
+    message_obj = getattr(event, "message_obj", None)
+    raw_message = getattr(message_obj, "raw_message", None)
+    if isinstance(raw_message, dict):
+        return raw_message.get("message_id")
+    return getattr(raw_message, "message_id", None)
+
+
+async def _react_to_parsed_message(event):
+    bot = getattr(event, "bot", None)
+    setter = getattr(bot, "set_msg_emoji_like", None)
+    if not callable(setter):
+        return
+
+    message_id = _get_message_id(event)
+    if message_id is None:
+        return
+
+    try:
+        message_id = int(message_id)
+    except (TypeError, ValueError):
+        logger.warning("无法获取可解析消息的有效 message_id：%s", message_id)
+        return
+
+    try:
+        await setter(
+            message_id=message_id,
+            emoji_id=PARSED_MESSAGE_EMOJI_ID,
+            emoji_type=PARSED_MESSAGE_EMOJI_TYPE,
+            set=True,
+        )
+    except Exception:
+        logger.exception("给可解析消息贴表情失败：message_id=%s", message_id)
+
+
 def _get_file_name(file_segment):
     for attr in ("name", "file_", "file", "filename"):
         value = getattr(file_segment, attr, None)
@@ -365,6 +402,7 @@ class MyPlugin(Star):
                 filename = _get_file_name(segment)
                 if not _is_accepted_file_name(filename):
                     return
+                logger.info("识别到可分析崩溃报告文件：filename=%s, group_id=%s", filename, group_id)
                 event.stop_event()
                 downloaded_path = await segment.get_file()
 
@@ -392,6 +430,11 @@ class MyPlugin(Star):
                 log_id = extract_mclogs_id_from_text(_get_plain_text(segment))
                 if not log_id:
                     return
+                logger.info(
+                    "识别到可分析 mclo.gs 链接：url=https://mclo.gs/%s, group_id=%s",
+                    log_id,
+                    group_id,
+                )
                 event.stop_event()
                 report_filename = f"mclo.gs/{log_id}"
                 source = "mclo.gs raw"
@@ -402,6 +445,7 @@ class MyPlugin(Star):
             else:
                 return
 
+            await _react_to_parsed_message(event)
             sender = _sender_text(event)
             prompt = build_analysis_prompt(report_filename, source, sender, prepared_content)
             provider_id = await self.context.get_current_chat_provider_id(umo=event.unified_msg_origin)
