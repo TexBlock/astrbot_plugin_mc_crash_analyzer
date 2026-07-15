@@ -2,7 +2,7 @@
 
 Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、静默地分析 Minecraft/PCL 崩溃报告文件和 mclo.gs 日志链接。
 
-插件会监听白名单群聊里的直接文件消息和 mclo.gs 文本链接，识别受支持的崩溃报告文件或日志链接后，使用 AstrBot 当前或默认 LLM 提供商生成分析结果。分析成功时，结果会以合并转发消息发送回来源群；分析失败时只写入日志，不在群内提示。
+插件会监听白名单群聊里的直接文件消息和 mclo.gs 文本链接，识别受支持的崩溃报告文件或日志链接后，按配置的 LLM 供应商顺序生成分析结果。分析成功时，结果会以合并转发消息发送回来源群；分析失败时只写入日志，不在群内提示。
 
 ## 平台支持
 
@@ -15,6 +15,14 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 在插件配置中设置以下字段：
 
 - `enabled_group_ids`：启用自动分析的群号列表。只有列表中的群会被监听。
+- `llm_providers`：LLM 供应商列表，可在 AstrBot Dashboard 中增删、选择模板并排序。支持：
+  - `OpenAI 兼容`：填写 API Key、Base URL 和模型名。
+  - `AstrBot 当前 Provider`：复用当前会话的 AstrBot Provider。
+  - `ModelScope`：填写 ModelScope API Token、模型名；Base URL 默认使用 `https://api-inference.modelscope.cn`。
+  列表按顺序依次尝试，第一个成功的供应商返回结果；留空时使用当前会话的 AstrBot Provider。
+- `llm_timeout_seconds`：OpenAI 兼容和 ModelScope 请求超时时间，默认 `120` 秒。
+- `llm_max_tokens`：OpenAI 兼容和 ModelScope 单次输出最大 token 数，默认 `4096`。
+- `reasoning_effort`：可选的兼容 API 推理强度参数，如 `low`、`medium`、`high`；留空则不发送。
 - `max_full_crash_chars`：直接送入模型分析的崩溃报告最大字符数。超过后会按插件逻辑截断或整理。
 - `latest_log_tail_lines`：当 zip 中没有崩溃报告文件时，从 `latest.log` 末尾提取的行数，默认 `800`。
 - `max_input_file_bytes`：允许读取的单个文件最大字节数，默认 `20971520`，即 20 MiB。
@@ -43,7 +51,8 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 - 处理直接发送的 File 消息，以及单条文本消息中的 mclo.gs 链接。
 - 忽略非 mclo.gs 文本链接、文本路径和回复消息。
 - 只监听 `enabled_group_ids` 中配置的群。
-- 分析使用 AstrBot 当前或默认 LLM 提供商。
+- 分析按 `llm_providers` 配置顺序调用；条目失败或返回空内容时自动尝试下一项。
+- `llm_providers` 留空时使用当前会话的 AstrBot LLM Provider。
 - 成功后向来源群发送合并转发报告。
 - 失败时只记录日志，不向群内发送提示。
 
@@ -57,6 +66,14 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 
 
 ## 更新日志
+
+### v0.2.0
+
+- 新增 `llm_providers` 动态供应商列表，支持 Dashboard 增删、模板选择和排序。
+- 新增 OpenAI 兼容、AstrBot 当前 Provider、ModelScope 三种供应商模板。
+- 多供应商按配置顺序调用，失败或空响应时自动回退到下一项。
+- 保留空列表时使用当前会话 AstrBot Provider 的兼容行为。
+- 新增直接 API 的超时、最大输出 token 和 `reasoning_effort` 配置。
 
 ### v0.1.1
 
