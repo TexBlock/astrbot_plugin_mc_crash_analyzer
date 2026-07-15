@@ -1,6 +1,6 @@
 name: astrbot_plugin_not_enough_crash
 display_name: Not Enough Crash
 desc: 自动静默分析 Minecraft/PCL 崩溃报告的 AstrBot 插件。
-version: v0.2.0
+version: v0.3.0
 author: mmyddd
 repo: https://github.com/mmyddd/astrbot_plugin_not_enough_crash

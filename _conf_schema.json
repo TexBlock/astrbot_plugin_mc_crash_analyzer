@@ -8,7 +8,7 @@
   "llm_providers": {
     "type": "template_list",
     "description": "LLM 供应商列表，按顺序依次尝试，第一个成功的供应商返回分析结果。可在 Dashboard 中动态增删和排序。",
-    "hint": "支持 OpenAI 兼容、AstrBot 当前 Provider 和 ModelScope 三种模板；留空时沿用当前会话的 AstrBot Provider。",
+    "hint": "支持 OpenAI 兼容、OpenAI Responses、AstrBot 当前 Provider 和 ModelScope 四种模板；留空时沿用当前会话的 AstrBot Provider。",
     "default": [],
     "templates": {
       "openai_compatible": {
@@ -36,6 +36,34 @@
             "description": "请求使用的模型名。",
             "default": "",
             "hint": "例如：gpt-4o、deepseek-chat、glm-4v-plus"
+          }
+        }
+      },
+      "openai_responses": {
+        "name": "OpenAI Responses",
+        "description": "适用于兼容 OpenAI Responses API 的接口。",
+        "items": {
+          "name": {
+            "type": "string",
+            "description": "供应商别名，仅用于日志标识和区分。",
+            "default": "OpenAI Responses API"
+          },
+          "api_key": {
+            "type": "string",
+            "description": "API Key。",
+            "default": ""
+          },
+          "base_url": {
+            "type": "string",
+            "description": "API 根地址，插件会追加 /v1/responses。",
+            "default": "",
+            "hint": "例如：https://api.openai.com"
+          },
+          "model": {
+            "type": "string",
+            "description": "请求使用的模型名。",
+            "default": "",
+            "hint": "例如：gpt-4.1、gpt-5"
           }
         }
       },
@@ -81,21 +109,21 @@
   },
   "llm_timeout_seconds": {
     "type": "float",
-    "description": "OpenAI 兼容和 ModelScope 请求超时时间（秒）。",
+    "description": "直接 API 请求超时时间（秒），适用于 OpenAI 兼容、OpenAI Responses 和 ModelScope。",
     "hint": "范围会被插件限制在 1 到 600 秒，默认 120 秒。",
     "default": 120.0
   },
   "llm_max_tokens": {
     "type": "int",
-    "description": "OpenAI 兼容和 ModelScope 单次分析允许生成的最大 token 数。",
+    "description": "直接 API 单次分析允许生成的最大 token 数，适用于 OpenAI 兼容、OpenAI Responses 和 ModelScope。",
     "hint": "默认 4096；插件内部最高限制为 32768。",
     "default": 4096
   },
   "reasoning_effort": {
     "type": "string",
-    "description": "可选的兼容 API 推理强度参数，例如 low、medium 或 high；留空则不发送。",
+    "description": "可选的直接 API 推理强度参数，例如 low、medium 或 high；留空则不发送。",
     "default": "",
-    "hint": "仅传递给 OpenAI 兼容和 ModelScope 请求，不影响 AstrBot Provider。"
+    "hint": "传递给 OpenAI 兼容和 ModelScope 的 reasoning_effort，以及 OpenAI Responses 的 reasoning.effort；不影响 AstrBot Provider。"
   },
   "max_full_crash_chars": {
     "type": "int",

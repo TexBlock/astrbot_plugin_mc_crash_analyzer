@@ -6,6 +6,7 @@ import socket
 import zipfile
 
 import httpx
+from openai import AsyncOpenAI
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 import astrbot.api.message_components as Comp
@@ -40,7 +41,7 @@ MAX_ZIP_ENTRIES_LIMIT = 1000
 MAX_LLM_TIMEOUT_SECONDS = 600.0
 MAX_LLM_MAX_TOKENS = 32768
 LLM_PROVIDER_TEMPLATE_KEYS = frozenset(
-    {"openai_compatible", "astrbot_provider", "modelscope"}
+    {"openai_compatible", "openai_responses", "astrbot_provider", "modelscope"}
 )
 PARSED_MESSAGE_EMOJI_ID = 289
 PARSED_MESSAGE_EMOJI_TYPE = "1"
@@ -300,6 +301,55 @@ def _extract_completion_text(response_json):
     return str(content).strip()
 
 
+def _extract_responses_text(response_json):
+    if not isinstance(response_json, dict):
+        output_text = getattr(response_json, "output_text", None)
+        if isinstance(output_text, str) and output_text.strip():
+            return output_text.strip()
+
+        model_dump = getattr(response_json, "model_dump", None)
+        if callable(model_dump):
+            return _extract_responses_text(model_dump())
+        raise ValueError("LLM 响应不是 JSON 对象或 Responses 对象")
+
+    output_text = response_json.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    output = response_json.get("output")
+    if not isinstance(output, list):
+        raise ValueError("LLM 响应缺少 output")
+
+    parts = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+
+        item_text = item.get("text")
+        if isinstance(item_text, str) and item_text:
+            parts.append(item_text)
+
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            text = part.get("text")
+            if isinstance(text, str) and text:
+                parts.append(text)
+
+    content = "".join(parts).strip()
+    if not content:
+        status = response_json.get("status", "unknown")
+        incomplete_details = response_json.get("incomplete_details", "unknown")
+        raise ValueError(
+            "LLM 返回内容为空，"
+            f"status={status}, incomplete_details={incomplete_details}"
+        )
+    return content
+
+
 async def _read_limited_http_response(response, max_bytes=MAX_LLM_RESPONSE_BYTES):
     chunks = []
     total_size = 0
@@ -419,7 +469,7 @@ def _build_forward_nodes(filename, source, sender, analysis):
     )
 
 
-@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.2.0")
+@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.3.0")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -509,6 +559,65 @@ class MyPlugin(Star):
             raise ValueError("LLM 响应不是有效 JSON") from error
         return _extract_completion_text(response_json)
 
+    async def _call_openai_responses_provider(self, prompt, provider):
+        api_key = str(provider.get("api_key") or "").strip()
+        base_url = str(provider.get("base_url") or "").strip()
+        model_name = str(provider.get("model") or "").strip()
+        if not api_key:
+            raise ValueError("缺少 API Key")
+        if not base_url:
+            raise ValueError("缺少 Base URL")
+        if not model_name:
+            raise ValueError("缺少模型名")
+
+        timeout_seconds = _bounded_config_float(
+            self.config,
+            "llm_timeout_seconds",
+            DEFAULT_LLM_TIMEOUT_SECONDS,
+            1.0,
+            MAX_LLM_TIMEOUT_SECONDS,
+        )
+        max_tokens = _bounded_config_int(
+            self.config,
+            "llm_max_tokens",
+            DEFAULT_LLM_MAX_TOKENS,
+            1,
+            MAX_LLM_MAX_TOKENS,
+        )
+        payload = {
+            "model": model_name,
+            "input": prompt,
+            "max_output_tokens": max_tokens,
+        }
+        reasoning_effort = str(
+            _config_get(self.config, "reasoning_effort", "") or ""
+        ).strip()
+        if reasoning_effort:
+            payload["reasoning"] = {"effort": reasoning_effort}
+
+        http_client = httpx.AsyncClient(
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            trust_env=False,
+        )
+        try:
+            client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=f"{base_url.rstrip('/')}/v1",
+                timeout=timeout_seconds,
+                max_retries=0,
+                http_client=http_client,
+            )
+            try:
+                response = await client.responses.create(**payload)
+            finally:
+                await client.close()
+        finally:
+            if not http_client.is_closed:
+                await http_client.aclose()
+
+        return _extract_responses_text(response)
+
     async def _generate_analysis(self, event, prompt):
         providers = _get_llm_providers(self.config)
         if not providers:
@@ -530,7 +639,17 @@ class MyPlugin(Star):
                         template_key,
                     )
                     analysis = await self._call_astrbot_provider(event, prompt)
-                elif template_key in LLM_PROVIDER_TEMPLATE_KEYS - {"astrbot_provider"}:
+                elif template_key == "openai_responses":
+                    logger.info(
+                        "尝试 LLM 供应商：name=%s, template=%s",
+                        provider_name,
+                        template_key,
+                    )
+                    analysis = await self._call_openai_responses_provider(
+                        prompt,
+                        provider,
+                    )
+                elif template_key in LLM_PROVIDER_TEMPLATE_KEYS - {"astrbot_provider", "openai_responses"}:
                     logger.info(
                         "尝试 LLM 供应商：name=%s, template=%s",
                         provider_name,

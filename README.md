@@ -17,12 +17,13 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 - `enabled_group_ids`：启用自动分析的群号列表。只有列表中的群会被监听。
 - `llm_providers`：LLM 供应商列表，可在 AstrBot Dashboard 中增删、选择模板并排序。支持：
   - `OpenAI 兼容`：填写 API Key、Base URL 和模型名。
+  - `OpenAI Responses`：使用 OpenAI Responses API，填写 API Key、Base URL 和模型名。
   - `AstrBot 当前 Provider`：复用当前会话的 AstrBot Provider。
   - `ModelScope`：填写 ModelScope API Token、模型名；Base URL 默认使用 `https://api-inference.modelscope.cn`。
   列表按顺序依次尝试，第一个成功的供应商返回结果；留空时使用当前会话的 AstrBot Provider。
-- `llm_timeout_seconds`：OpenAI 兼容和 ModelScope 请求超时时间，默认 `120` 秒。
-- `llm_max_tokens`：OpenAI 兼容和 ModelScope 单次输出最大 token 数，默认 `4096`。
-- `reasoning_effort`：可选的兼容 API 推理强度参数，如 `low`、`medium`、`high`；留空则不发送。
+- `llm_timeout_seconds`：直接 API 请求超时时间，默认 `120` 秒。
+- `llm_max_tokens`：直接 API 单次输出最大 token 数，默认 `4096`。
+- `reasoning_effort`：可选的直接 API 推理强度参数，如 `low`、`medium`、`high`；Responses API 会将其发送为 `reasoning.effort`。
 - `max_full_crash_chars`：直接送入模型分析的崩溃报告最大字符数。超过后会按插件逻辑截断或整理。
 - `latest_log_tail_lines`：当 zip 中没有崩溃报告文件时，从 `latest.log` 末尾提取的行数，默认 `800`。
 - `max_input_file_bytes`：允许读取的单个文件最大字节数，默认 `20971520`，即 20 MiB。
@@ -66,6 +67,10 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 
 
 ## 更新日志
+
+### v0.3.0
+
+- 新增 OpenAI Responses 供应商模板，调用 `/v1/responses` 并解析 Responses API 文本输出。
 
 ### v0.2.0
 
