@@ -479,6 +479,25 @@ async def _close_async_resource(resource):
         await result
 
 
+async def _read_astrbot_provider_stream_text(stream):
+    parts = []
+    final_text = ""
+
+    async for llm_response in stream:
+        text = str(getattr(llm_response, "completion_text", "") or "")
+        if not text:
+            continue
+        if getattr(llm_response, "is_chunk", False):
+            parts.append(text)
+        else:
+            final_text = text
+
+    content = (final_text or "".join(parts)).strip()
+    if not content:
+        raise ValueError("AstrBot Provider 流式响应内容为空")
+    return content
+
+
 async def _read_limited_http_response(response, max_bytes=MAX_LLM_RESPONSE_BYTES):
     chunks = []
     total_size = 0
@@ -621,6 +640,18 @@ class MyPlugin(Star):
         provider_id = await self.context.get_current_chat_provider_id(
             umo=event.unified_msg_origin
         )
+        provider_getter = getattr(self.context, "get_provider_by_id", None)
+        if callable(provider_getter):
+            provider = provider_getter(provider_id)
+            if inspect.isawaitable(provider):
+                provider = await provider
+            stream_method = getattr(provider, "text_chat_stream", None)
+            if callable(stream_method):
+                stream = stream_method(prompt=prompt)
+                if inspect.isawaitable(stream):
+                    stream = await stream
+                return await _read_astrbot_provider_stream_text(stream)
+
         llm_resp = await self.context.llm_generate(
             chat_provider_id=provider_id,
             prompt=prompt,

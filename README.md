@@ -70,7 +70,7 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 
 ### v0.4.0
 
-- OpenAI 兼容和 Responses API 请求改为流式读取并拼接文本增量。
+- LLM 请求阶段优先使用流式接口并拼接文本增量；不支持流式的 AstrBot Provider 自动回退到完整结果接口。
 
 ### v0.3.0
 
