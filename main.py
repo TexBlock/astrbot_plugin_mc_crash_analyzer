@@ -1,3 +1,4 @@
+import inspect
 import io
 import json
 import os
@@ -301,6 +302,88 @@ def _extract_completion_text(response_json):
     return str(content).strip()
 
 
+def _coerce_text_content(content):
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                text = part.get("text")
+                if text:
+                    parts.append(str(text))
+            elif part:
+                parts.append(str(part))
+        return "".join(parts)
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _extract_completion_delta(response_json):
+    if not isinstance(response_json, dict):
+        return ""
+
+    choices = response_json.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return ""
+
+    delta = choice.get("delta")
+    if isinstance(delta, dict):
+        return _coerce_text_content(delta.get("content"))
+    if isinstance(delta, str):
+        return delta
+    return _coerce_text_content(choice.get("text"))
+
+
+async def _read_completion_stream_text(
+    response,
+    max_bytes=MAX_LLM_RESPONSE_BYTES,
+):
+    parts = []
+    total_size = 0
+
+    async for raw_line in response.aiter_lines():
+        total_size += len(raw_line.encode("utf-8")) + 1
+        if total_size > max_bytes:
+            raise ValueError(
+                f"LLM 流式响应大小超过限制：{total_size} > {max_bytes}"
+            )
+
+        line = raw_line.strip()
+        if not line or line.startswith(":") or line.startswith("event:"):
+            continue
+        data = line[5:].strip() if line.startswith("data:") else line
+        if not data:
+            continue
+        if data == "[DONE]":
+            break
+
+        try:
+            event_json = json.loads(data)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("LLM 流式响应包含无效 JSON") from error
+
+        delta = _extract_completion_delta(event_json)
+        if delta:
+            parts.append(delta)
+            continue
+
+        # Some compatible endpoints ignore stream=true and return one normal JSON response.
+        if isinstance(event_json, dict) and event_json.get("choices"):
+            try:
+                parts.append(_extract_completion_text(event_json))
+            except ValueError:
+                pass
+
+    content = "".join(parts).strip()
+    if not content:
+        raise ValueError("LLM 流式响应内容为空")
+    return content
+
+
 def _extract_responses_text(response_json):
     if not isinstance(response_json, dict):
         output_text = getattr(response_json, "output_text", None)
@@ -348,6 +431,52 @@ def _extract_responses_text(response_json):
             f"status={status}, incomplete_details={incomplete_details}"
         )
     return content
+
+
+def _extract_responses_stream_delta(event):
+    if isinstance(event, dict):
+        event_type = event.get("type")
+        delta = event.get("delta")
+    else:
+        event_type = getattr(event, "type", None)
+        delta = getattr(event, "delta", None)
+
+    if event_type != "response.output_text.delta":
+        return ""
+    return str(delta or "")
+
+
+async def _read_responses_stream_text(
+    stream,
+    max_bytes=MAX_LLM_RESPONSE_BYTES,
+):
+    parts = []
+    total_size = 0
+
+    async for event in stream:
+        delta = _extract_responses_stream_delta(event)
+        if not delta:
+            continue
+        total_size += len(delta.encode("utf-8"))
+        if total_size > max_bytes:
+            raise ValueError(
+                f"LLM 流式响应大小超过限制：{total_size} > {max_bytes}"
+            )
+        parts.append(delta)
+
+    content = "".join(parts).strip()
+    if not content:
+        raise ValueError("LLM 流式响应内容为空")
+    return content
+
+
+async def _close_async_resource(resource):
+    close = getattr(resource, "close", None)
+    if not callable(close):
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
 
 
 async def _read_limited_http_response(response, max_bytes=MAX_LLM_RESPONSE_BYTES):
@@ -469,7 +598,7 @@ def _build_forward_nodes(filename, source, sender, analysis):
     )
 
 
-@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.3.0")
+@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.4.0")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -533,6 +662,7 @@ class MyPlugin(Star):
             "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
+            "stream": True,
         }
         reasoning_effort = str(
             _config_get(self.config, "reasoning_effort", "") or ""
@@ -551,13 +681,7 @@ class MyPlugin(Star):
             timeout=timeout_seconds,
         ) as response:
             response.raise_for_status()
-            response_body = await _read_limited_http_response(response)
-
-        try:
-            response_json = json.loads(response_body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise ValueError("LLM 响应不是有效 JSON") from error
-        return _extract_completion_text(response_json)
+            return await _read_completion_stream_text(response)
 
     async def _call_openai_responses_provider(self, prompt, provider):
         api_key = str(provider.get("api_key") or "").strip()
@@ -608,15 +732,17 @@ class MyPlugin(Star):
                 max_retries=0,
                 http_client=http_client,
             )
+            stream = None
             try:
-                response = await client.responses.create(**payload)
+                stream = await client.responses.create(**payload, stream=True)
+                return await _read_responses_stream_text(stream)
             finally:
+                if stream is not None:
+                    await _close_async_resource(stream)
                 await client.close()
         finally:
             if not http_client.is_closed:
                 await http_client.aclose()
-
-        return _extract_responses_text(response)
 
     async def _generate_analysis(self, event, prompt):
         providers = _get_llm_providers(self.config)

@@ -68,6 +68,10 @@ Not Enough Crash 是一个 AstrBot 插件，用于在配置的群聊中自动、
 
 ## 更新日志
 
+### v0.4.0
+
+- OpenAI 兼容和 Responses API 请求改为流式读取并拼接文本增量。
+
 ### v0.3.0
 
 - 新增 OpenAI Responses 供应商模板，调用 `/v1/responses` 并解析 Responses API 文本输出。
