@@ -220,8 +220,7 @@ def prepare_crash_text(text, max_chars=12000):
     return prefix + excerpt[:available]
 
 
-def build_analysis_prompt(filename, source, sender, report_content):
-    return f"""请对下面的 Minecraft 崩溃报告做详细的中文分析。
+DEFAULT_ANALYSIS_PROMPT = """请对下面的 Minecraft 崩溃报告做详细的中文分析。
 
 文件名：{filename}
 来源：{source}
@@ -241,6 +240,30 @@ def build_analysis_prompt(filename, source, sender, report_content):
 崩溃报告内容：
 {report_content}
 """
+
+
+def build_analysis_prompt(filename, source, sender, report_content, custom_prompt=""):
+    base = DEFAULT_ANALYSIS_PROMPT.format(
+        filename=filename,
+        source=source,
+        sender=sender,
+        report_content=report_content,
+    )
+    extra = custom_prompt.strip() if custom_prompt else ""
+    if not extra:
+        return base
+
+    try:
+        extra = extra.format(
+            filename=filename,
+            source=source,
+            sender=sender,
+            report_content=report_content,
+        )
+    except KeyError as error:
+        logger.warning("自定义提示词包含未知占位符 %s，将原样附加", error)
+
+    return f"{base}\n\n{extra}"
 
 
 def _config_get(config, key, default):
@@ -617,7 +640,7 @@ def _build_forward_nodes(filename, source, sender, analysis):
     )
 
 
-@register("astrbot_plugin_not_enough_crash", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.4.0")
+@register("astrbot_plugin_mc_crash_analyzer", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.0")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -934,7 +957,8 @@ class MyPlugin(Star):
 
             await _react_to_parsed_message(event)
             sender = _sender_text(event)
-            prompt = build_analysis_prompt(report_filename, source, sender, prepared_content)
+            custom_prompt = str(_config_get(self.config, "custom_prompt", "") or "")
+            prompt = build_analysis_prompt(report_filename, source, sender, prepared_content, custom_prompt)
             analysis = await self._generate_analysis(event, prompt)
             yield event.chain_result([_build_forward_nodes(report_filename, source, sender, analysis)])
         except Exception:

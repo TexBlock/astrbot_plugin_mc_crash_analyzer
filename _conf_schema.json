@@ -5,6 +5,12 @@
     "hint": "请填写群号字符串列表，例如 [\"123456789\"]；留空表示不处理任何群聊。",
     "default": []
   },
+  "custom_prompt": {
+    "type": "string",
+    "description": "自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。",
+    "hint": "支持变量占位符：{filename}（文件名）、{source}（来源）、{sender}（发送者）、{report_content}（崩溃报告内容）。",
+    "default": ""
+  },
   "llm_providers": {
     "type": "template_list",
     "description": "LLM 供应商列表，按顺序依次尝试，第一个成功的供应商返回分析结果。可在 Dashboard 中动态增删和排序。",
