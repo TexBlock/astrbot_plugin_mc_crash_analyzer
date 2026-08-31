@@ -20,7 +20,7 @@ MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动�
   - `OpenAI Responses`：使用 OpenAI Responses API，填写 API Key、Base URL 和模型名。
   - `AstrBot 当前 Provider`：复用当前会话的 AstrBot Provider。
   - `ModelScope`：填写 ModelScope API Token、模型名；Base URL 默认使用 `https://api-inference.modelscope.cn`。
-  列表按顺序依次尝试，第一个成功的供应商返回结果；留空时使用当前会话的 AstrBot Provider。
+    列表按顺序依次尝试，第一个成功的供应商返回结果；留空时使用当前会话的 AstrBot Provider。
 - `llm_timeout_seconds`：直接 API 请求超时时间，默认 `120` 秒。
 - `llm_max_tokens`：直接 API 单次输出最大 token 数，默认 `4096`。
 - `reasoning_effort`：可选的直接 API 推理强度参数，如 `low`、`medium`、`high`；Responses API 会将其发送为 `reasoning.effort`。
@@ -64,31 +64,6 @@ MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动�
 - 文件获取依赖 AstrBot 的 `File.get_file()`。
 - 分析能力依赖已配置且可用的 AstrBot LLM 提供商。
 - 超过大小或条目数量限制的文件会被静默忽略，并只在日志中记录原因。
-
-
-## 更新日志
-
-### v0.4.0
-
-- LLM 请求阶段优先使用流式接口并拼接文本增量；不支持流式的 AstrBot Provider 自动回退到完整结果接口。
-
-### v0.3.0
-
-- 新增 OpenAI Responses 供应商模板，调用 `/v1/responses` 并解析 Responses API 文本输出。
-
-### v0.2.0
-
-- 新增 `llm_providers` 动态供应商列表，支持 Dashboard 增删、模板选择和排序。
-- 新增 OpenAI 兼容、AstrBot 当前 Provider、ModelScope 三种供应商模板。
-- 多供应商按配置顺序调用，失败或空响应时自动回退到下一项。
-- 保留空列表时使用当前会话 AstrBot Provider 的兼容行为。
-- 新增直接 API 的超时、最大输出 token 和 `reasoning_effort` 配置。
-
-### v0.1.1
-
-- 新增 mclo.gs 日志链接识别：群内发送 `https://mclo.gs/<7位ID>` 时自动获取原始日志并进入分析链路。
-- 通过 `https://api.mclo.gs/1/raw/<ID>` 拉取日志内容，并沿用现有大小限制、截断和 LLM 分析流程。
-- 更新依赖声明，补充 `httpx[http2]` 用于异步获取 mclo.gs raw 日志。
 
 ## 最小验证命令
 
