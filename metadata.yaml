@@ -1,6 +1,8 @@
 name: astrbot_plugin_mc_crash_analyzer
 display_name: MC Crash Analyzer
 desc: 自动静默分析 Minecraft/PCL 崩溃报告的 AstrBot 插件。
-version: v0.1.0
+version: v0.1.1
 author: TexBlock
 repo: https://github.com/TexBlock/astrbot_plugin_mc_crash_analyzer
+support_platforms:
+  - aiocqhttp
