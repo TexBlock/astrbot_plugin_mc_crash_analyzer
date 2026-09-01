@@ -1,6 +1,6 @@
 # MC Crash Analyzer
 
-MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动、静默地分析 Minecraft/PCL 崩溃报告文件和 mclo.gs 日志链接。
+MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动、静默地分析 Minecraft/PCL 崩溃报告文件和 mclo.gs 日志链接。Fork自[mmyddd/astrbot_plugin_not_enough_crash](https://github.com/mmyddd/astrbot_plugin_not_enough_crash)。
 
 插件会监听白名单群聊里的直接文件消息和 mclo.gs 文本链接，识别受支持的崩溃报告文件或日志链接后，按配置的 LLM 供应商顺序生成分析结果。分析成功时，结果会以合并转发消息发送回来源群；分析失败时只写入日志，不在群内提示。
 
