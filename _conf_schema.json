@@ -5,6 +5,18 @@
     "hint": "请填写群号字符串列表，例如 [\"123456789\"]；留空表示不处理任何群聊。",
     "default": []
   },
+  "casual_mode_group_ids": {
+    "type": "list",
+    "description": "启用通俗模式的群聊 ID 列表。",
+    "hint": "请填写群号字符串列表，例如 [\"123456789\"]；留空表示所有群均使用默认的详细分析模式。",
+    "default": []
+  },
+  "reply_mode": {
+    "type": "string",
+    "description": "分析结果的回复方式。",
+    "hint": "\"forward\" 为合并转发（默认），适合较长的详细分析；\"plain\" 为直接文本回复，适合通俗模式下的简短分析。",
+    "default": "forward"
+  },
   "custom_prompt": {
     "type": "string",
     "description": "自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。",

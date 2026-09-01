@@ -220,6 +220,25 @@ def prepare_crash_text(text, max_chars=12000):
     return prefix + excerpt[:available]
 
 
+CASUAL_MODE_PROMPT = """请用最通俗的口语化中文分析下面的 Minecraft 崩溃报告。
+
+文件名：{filename}
+来源：{source}
+发送者：{sender}
+
+要求：
+- 就像一个懂 MC 的朋友在群里聊天一样，用人话解释游戏为什么崩了。
+- 不要使用任何专业术语（如 mixin、类加载、注入、堆栈、异常链等）。
+- 直接说两件事：①游戏为什么崩了 ②怎么修。
+- 控制在 3-5 句话以内，不分段、不用符号列表，就一段纯文字。
+- 可以适当用口语和语气词，让回复自然一些。
+- 不要编造报告中不存在的 Mod 或版本；不确定时明确说不确定。
+
+崩溃报告内容：
+{report_content}
+"""
+
+
 DEFAULT_ANALYSIS_PROMPT = """请对下面的 Minecraft 崩溃报告做详细的中文分析。
 
 文件名：{filename}
@@ -242,8 +261,13 @@ DEFAULT_ANALYSIS_PROMPT = """请对下面的 Minecraft 崩溃报告做详细的�
 """
 
 
-def build_analysis_prompt(filename, source, sender, report_content, custom_prompt=""):
-    base = DEFAULT_ANALYSIS_PROMPT.format(
+def build_analysis_prompt(filename, source, sender, report_content, custom_prompt="", casual_mode=False):
+    base = CASUAL_MODE_PROMPT.format(
+        filename=filename,
+        source=source,
+        sender=sender,
+        report_content=report_content,
+    ) if casual_mode else DEFAULT_ANALYSIS_PROMPT.format(
         filename=filename,
         source=source,
         sender=sender,
@@ -640,6 +664,11 @@ def _build_forward_nodes(filename, source, sender, analysis):
     )
 
 
+def _build_plain_reply(filename, source, sender, analysis):
+    info = f"来源/文件信息\n文件名：{filename}\n来源：{source}\n发送者：{sender}"
+    return Comp.Plain(f"{info}\n\n{analysis}")
+
+
 @register("astrbot_plugin_mc_crash_analyzer", "mmyddd", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.0")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
@@ -958,9 +987,15 @@ class MyPlugin(Star):
             await _react_to_parsed_message(event)
             sender = _sender_text(event)
             custom_prompt = str(_config_get(self.config, "custom_prompt", "") or "")
-            prompt = build_analysis_prompt(report_filename, source, sender, prepared_content, custom_prompt)
+            casual_groups = _config_get(self.config, "casual_mode_group_ids", [])
+            casual_mode = is_group_allowed(group_id, casual_groups)
+            prompt = build_analysis_prompt(report_filename, source, sender, prepared_content, custom_prompt, casual_mode=casual_mode)
             analysis = await self._generate_analysis(event, prompt)
-            yield event.chain_result([_build_forward_nodes(report_filename, source, sender, analysis)])
+            reply_mode = str(_config_get(self.config, "reply_mode", "forward") or "forward").strip().lower()
+            if reply_mode == "plain":
+                yield event.chain_result([_build_plain_reply(report_filename, source, sender, analysis)])
+            else:
+                yield event.chain_result([_build_forward_nodes(report_filename, source, sender, analysis)])
         except Exception:
             logger.exception("处理崩溃报告文件时发生异常")
             return
