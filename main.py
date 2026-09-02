@@ -413,7 +413,7 @@ def _build_plain_reply(filename, source, sender, analysis):
     return Comp.Plain(f"{info}\n\n{analysis}")
 
 
-@register("astrbot_plugin_mc_crash_analyzer", "TexBlock", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.1")
+@register("astrbot_plugin_mc_crash_analyzer", "TexBlock", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.2")
 class MyPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
