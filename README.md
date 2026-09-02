@@ -18,6 +18,7 @@ MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动�
 - `provider_id`：崩溃报告分析使用的 LLM 提供商（模型）。留空则使用系统当前默认对话模型。
 - `casual_mode_group_ids`：启用通俗模式的群号列表。列表中的群将使用口语化、通俗易懂的分析结果，适合普通玩家阅读；留空时所有群均使用默认的详细分析模式。
 - `reply_mode`：分析结果的回复方式。`forward`（默认）为合并转发，适合较长的详细分析；`plain` 为直接文本回复，适合通俗模式下的简短分析。
+- `show_detail`：是否在分析结果中显示「来源/文件信息」（文件名、来源、发送者）。默认开启，关闭后只显示 LLM 分析内容。
 - `custom_prompt`：自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。支持变量占位符：`{filename}`、`{source}`、`{sender}`、`{report_content}`。
 - `max_full_crash_chars`：送入模型分析的崩溃报告最大字符数，默认 `60000`。超过后会按插件逻辑截断或整理。
 - `latest_log_tail_lines`：当 zip 中没有崩溃报告文件时，从 `latest.log` 末尾提取的行数，默认 `800`。

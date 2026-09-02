@@ -25,6 +25,12 @@
     "default": "forward",
     "options": ["forward", "plain"]
   },
+  "show_detail": {
+    "type": "bool",
+    "description": "在分析结果中显示「来源/文件信息」（文件名、来源、发送者）。",
+    "hint": "关闭后回复中只显示 LLM 分析内容，不显示文件信息头部。",
+    "default": true
+  },
   "custom_prompt": {
     "type": "string",
     "description": "自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。",

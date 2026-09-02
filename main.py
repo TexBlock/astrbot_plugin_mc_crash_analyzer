@@ -398,19 +398,20 @@ def _sender_text(event):
     return f"{sender_name} ({sender_id})"
 
 
-def _build_forward_nodes(filename, source, sender, analysis):
-    info = f"来源/文件信息\n文件名：{filename}\n来源：{source}\n发送者：{sender}"
-    return Comp.Nodes(
-        [
-            Comp.Node(uin="0", name="崩溃报告来源", content=[Comp.Plain(info)]),
-            Comp.Node(uin="0", name="LLM 分析", content=[Comp.Plain(analysis)]),
-        ]
-    )
+def _build_forward_nodes(filename, source, sender, analysis, show_detail=True):
+    nodes = []
+    if show_detail:
+        info = f"来源/文件信息\n文件名：{filename}\n来源：{source}\n发送者：{sender}"
+        nodes.append(Comp.Node(uin="0", name="崩溃报告来源", content=[Comp.Plain(info)]))
+    nodes.append(Comp.Node(uin="0", name="LLM 分析", content=[Comp.Plain(analysis)]))
+    return Comp.Nodes(nodes)
 
 
-def _build_plain_reply(filename, source, sender, analysis):
-    info = f"来源/文件信息\n文件名：{filename}\n来源：{source}\n发送者：{sender}"
-    return Comp.Plain(f"{info}\n\n{analysis}")
+def _build_plain_reply(filename, source, sender, analysis, show_detail=True):
+    if show_detail:
+        info = f"来源/文件信息\n文件名：{filename}\n来源：{source}\n发送者：{sender}"
+        return Comp.Plain(f"{info}\n\n{analysis}")
+    return Comp.Plain(analysis)
 
 
 @register("astrbot_plugin_mc_crash_analyzer", "TexBlock", "静默分析群聊中的 Minecraft 崩溃报告文件", "0.1.2")
@@ -562,13 +563,14 @@ class MyPlugin(Star):
             custom_prompt = str(_config_get(self.config, "custom_prompt", "") or "")
             casual_groups = _config_get(self.config, "casual_mode_group_ids", [])
             casual_mode = is_group_allowed(group_id, casual_groups)
+            show_detail = bool(_config_get(self.config, "show_detail", True))
             prompt = build_analysis_prompt(report_filename, source, sender, prepared_content, custom_prompt, casual_mode=casual_mode)
             analysis = await self._generate_analysis(event, prompt)
             reply_mode = str(_config_get(self.config, "reply_mode", "forward") or "forward").strip().lower()
             if reply_mode == "plain":
-                yield event.chain_result([_build_plain_reply(report_filename, source, sender, analysis)])
+                yield event.chain_result([_build_plain_reply(report_filename, source, sender, analysis, show_detail)])
             else:
-                yield event.chain_result([_build_forward_nodes(report_filename, source, sender, analysis)])
+                yield event.chain_result([_build_forward_nodes(report_filename, source, sender, analysis, show_detail)])
         except Exception:
             logger.exception("处理崩溃报告文件时发生异常")
             return
