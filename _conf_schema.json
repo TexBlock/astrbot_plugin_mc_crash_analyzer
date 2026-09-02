@@ -5,6 +5,12 @@
     "hint": "请填写群号字符串列表，例如 [\"123456789\"]；留空表示不处理任何群聊。",
     "default": []
   },
+  "provider_id": {
+    "type": "string",
+    "description": "崩溃报告分析使用的 LLM 提供商（模型）。",
+    "hint": "选择崩溃报告分析的 LLM 提供商（模型）。留空则使用系统当前默认对话模型。",
+    "default": ""
+  },
   "casual_mode_group_ids": {
     "type": "list",
     "description": "启用通俗模式的群聊 ID 列表。",
@@ -14,134 +20,15 @@
   "reply_mode": {
     "type": "string",
     "description": "分析结果的回复方式。",
-    "hint": "\"forward\" 为合并转发（默认），适合较长的详细分析；\"plain\" 为直接文本回复，适合通俗模式下的简短分析。",
-    "default": "forward"
+    "hint": "选择 \"forward\" 为合并转发（默认），适合较长的详细分析；选择 \"plain\" 为直接文本回复，适合通俗模式下的简短分析。",
+    "default": "forward",
+    "options": ["forward", "plain"]
   },
   "custom_prompt": {
     "type": "string",
     "description": "自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。",
     "hint": "支持变量占位符：{filename}（文件名）、{source}（来源）、{sender}（发送者）、{report_content}（崩溃报告内容）。",
     "default": ""
-  },
-  "llm_providers": {
-    "type": "template_list",
-    "description": "LLM 供应商列表，按顺序依次尝试，第一个成功的供应商返回分析结果。可在 Dashboard 中动态增删和排序。",
-    "hint": "支持 OpenAI 兼容、OpenAI Responses、AstrBot 当前 Provider 和 ModelScope 四种模板；留空时沿用当前会话的 AstrBot Provider。",
-    "default": [],
-    "templates": {
-      "openai_compatible": {
-        "name": "OpenAI 兼容",
-        "description": "适用于任何 OpenAI Chat Completions 格式兼容的 API。",
-        "items": {
-          "name": {
-            "type": "string",
-            "description": "供应商别名，仅用于日志标识和区分。",
-            "default": "OpenAI API"
-          },
-          "api_key": {
-            "type": "string",
-            "description": "API Key。",
-            "default": ""
-          },
-          "base_url": {
-            "type": "string",
-            "description": "API 根地址，插件会追加 /v1/chat/completions。",
-            "default": "",
-            "hint": "例如：https://api.deepseek.com"
-          },
-          "model": {
-            "type": "string",
-            "description": "请求使用的模型名。",
-            "default": "",
-            "hint": "例如：gpt-4o、deepseek-chat、glm-4v-plus"
-          }
-        }
-      },
-      "openai_responses": {
-        "name": "OpenAI Responses",
-        "description": "适用于兼容 OpenAI Responses API 的接口。",
-        "items": {
-          "name": {
-            "type": "string",
-            "description": "供应商别名，仅用于日志标识和区分。",
-            "default": "OpenAI Responses API"
-          },
-          "api_key": {
-            "type": "string",
-            "description": "API Key。",
-            "default": ""
-          },
-          "base_url": {
-            "type": "string",
-            "description": "API 根地址，插件会追加 /v1/responses。",
-            "default": "",
-            "hint": "例如：https://api.openai.com"
-          },
-          "model": {
-            "type": "string",
-            "description": "请求使用的模型名。",
-            "default": "",
-            "hint": "例如：gpt-4.1、gpt-5"
-          }
-        }
-      },
-      "astrbot_provider": {
-        "name": "AstrBot 当前 Provider",
-        "description": "复用当前会话配置的 AstrBot LLM Provider，不需要额外填写 API Key。",
-        "items": {
-          "name": {
-            "type": "string",
-            "description": "供应商别名，仅用于日志标识。",
-            "default": "AstrBot Provider"
-          }
-        }
-      },
-      "modelscope": {
-        "name": "ModelScope",
-        "description": "ModelScope 推理 API，使用 OpenAI 兼容协议。",
-        "items": {
-          "name": {
-            "type": "string",
-            "description": "供应商别名，仅用于日志标识。",
-            "default": "ModelScope"
-          },
-          "api_key": {
-            "type": "string",
-            "description": "ModelScope API Token。",
-            "default": ""
-          },
-          "base_url": {
-            "type": "string",
-            "description": "ModelScope API 根地址，插件会追加 /v1/chat/completions。",
-            "default": "https://api-inference.modelscope.cn"
-          },
-          "model": {
-            "type": "string",
-            "description": "ModelScope 模型名。",
-            "default": "",
-            "hint": "例如：Qwen/Qwen2.5-VL-72B-Instruct、deepseek-ai/DeepSeek-VL2"
-          }
-        }
-      }
-    }
-  },
-  "llm_timeout_seconds": {
-    "type": "float",
-    "description": "直接 API 请求超时时间（秒），适用于 OpenAI 兼容、OpenAI Responses 和 ModelScope。",
-    "hint": "范围会被插件限制在 1 到 600 秒，默认 120 秒。",
-    "default": 120.0
-  },
-  "llm_max_tokens": {
-    "type": "int",
-    "description": "直接 API 单次分析允许生成的最大 token 数，适用于 OpenAI 兼容、OpenAI Responses 和 ModelScope。",
-    "hint": "默认 4096；插件内部最高限制为 32768。",
-    "default": 4096
-  },
-  "reasoning_effort": {
-    "type": "string",
-    "description": "可选的直接 API 推理强度参数，例如 low、medium 或 high；留空则不发送。",
-    "default": "",
-    "hint": "传递给 OpenAI 兼容和 ModelScope 的 reasoning_effort，以及 OpenAI Responses 的 reasoning.effort；不影响 AstrBot Provider。"
   },
   "max_full_crash_chars": {
     "type": "int",

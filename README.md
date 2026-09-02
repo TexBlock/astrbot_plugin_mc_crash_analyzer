@@ -15,18 +15,11 @@ MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动�
 在插件配置中设置以下字段：
 
 - `enabled_group_ids`：启用自动分析的群号列表。只有列表中的群会被监听。
+- `provider_id`：崩溃报告分析使用的 LLM 提供商（模型）。留空则使用系统当前默认对话模型。
 - `casual_mode_group_ids`：启用通俗模式的群号列表。列表中的群将使用口语化、通俗易懂的分析结果，适合普通玩家阅读；留空时所有群均使用默认的详细分析模式。
 - `reply_mode`：分析结果的回复方式。`forward`（默认）为合并转发，适合较长的详细分析；`plain` 为直接文本回复，适合通俗模式下的简短分析。
-- `llm_providers`：LLM 供应商列表，可在 AstrBot Dashboard 中增删、选择模板并排序。支持：
-  - `OpenAI 兼容`：填写 API Key、Base URL 和模型名。
-  - `OpenAI Responses`：使用 OpenAI Responses API，填写 API Key、Base URL 和模型名。
-  - `AstrBot 当前 Provider`：复用当前会话的 AstrBot Provider。
-  - `ModelScope`：填写 ModelScope API Token、模型名；Base URL 默认使用 `https://api-inference.modelscope.cn`。
-    列表按顺序依次尝试，第一个成功的供应商返回结果；留空时使用当前会话的 AstrBot Provider。
-- `llm_timeout_seconds`：直接 API 请求超时时间，默认 `120` 秒。
-- `llm_max_tokens`：直接 API 单次输出最大 token 数，默认 `4096`。
-- `reasoning_effort`：可选的直接 API 推理强度参数，如 `low`、`medium`、`high`；Responses API 会将其发送为 `reasoning.effort`。
-- `max_full_crash_chars`：直接送入模型分析的崩溃报告最大字符数。超过后会按插件逻辑截断或整理。
+- `custom_prompt`：自定义提示词，将追加到内置默认提示词之后。留空则仅使用默认提示词。支持变量占位符：`{filename}`、`{source}`、`{sender}`、`{report_content}`。
+- `max_full_crash_chars`：送入模型分析的崩溃报告最大字符数，默认 `60000`。超过后会按插件逻辑截断或整理。
 - `latest_log_tail_lines`：当 zip 中没有崩溃报告文件时，从 `latest.log` 末尾提取的行数，默认 `800`。
 - `max_input_file_bytes`：允许读取的单个文件最大字节数，默认 `20971520`，即 20 MiB。
 - `max_zip_member_bytes`：允许读取的 zip 内单个日志条目最大解压字节数，默认 `5242880`，即 5 MiB。
@@ -55,8 +48,7 @@ MC Crash Analyzer 是一个 AstrBot 插件，用于在配置的群聊中自动�
 - 忽略非 mclo.gs 文本链接、文本路径和回复消息。
 - 只监听 `enabled_group_ids` 中配置的群。
 - 当群号在 `casual_mode_group_ids` 列表中时，使用通俗模式提示词，输出口语化、简短的分析结果（3-5 句话，不含专业术语），适合普通玩家阅读；否则使用默认的详细分析模式（包含文件信息、关键异常、证据片段、解决步骤等 7 项结构化输出）。
-- 分析按 `llm_providers` 配置顺序调用；条目失败或返回空内容时自动尝试下一项。
-- `llm_providers` 留空时使用当前会话的 AstrBot LLM Provider。
+- 使用 AstrBot 已配置的 LLM Provider 进行分析。可通过 `provider_id` 指定特定提供商，留空则使用当前会话的默认对话模型。
 - 成功后向来源群发送分析结果。回复方式由 `reply_mode` 决定：`forward` 为合并转发消息，`plain` 为直接文本回复。
 - 失败时只记录日志，不向群内发送提示。
 
